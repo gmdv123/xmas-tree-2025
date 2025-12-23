@@ -14,6 +14,7 @@ let hasSupernovaed = false;
 const supernovaDuration = 2500;
 const meFadeDuration = 800;
 let firstInteractionHandled = false;
+let treeScale = 1; // responsive scale for tree and overlay elements
 
 
 const meImage = new Image();
@@ -59,11 +60,20 @@ let lastFrameTime = null;
 // Particle speed control (slow before supernova)
 let particleSpeedScale = 0.15;
 
-const particleCount = 4000;
+const particleCount = 2500;
 const colors = ['#00FF66', '#00A843', '#FF0000', '#FFF200', '#FFF200', '#00EEFF'];
 const backgroundStarCount = 1800;
 
 function init() {
+    // Ensure full-viewport rendering on mobile
+    document.body.style.margin = '0';
+    document.body.style.overflow = 'hidden';
+    canvas.style.position = 'fixed';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.display = 'block';
+    canvas.style.touchAction = 'none'; // avoid scroll interference
+
     resizeCanvas();
     particles = Array.from({ length: particleCount }, () => new Particle());
     backgroundStars = Array.from({ length: backgroundStarCount }, () => ({
@@ -80,13 +90,21 @@ function init() {
 
 function resizeCanvas() {
     dpr = window.devicePixelRatio || 1;
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
-    canvas.width = Math.floor(window.innerWidth * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
+    const viewportWidth = (window.visualViewport && window.visualViewport.width) || window.innerWidth || document.documentElement.clientWidth || canvas.clientWidth || 0;
+    const viewportHeight = (window.visualViewport && window.visualViewport.height) || window.innerHeight || document.documentElement.clientHeight || canvas.clientHeight || 0;
+
+    canvas.style.width = `${viewportWidth}px`;
+    canvas.style.height = `${viewportHeight}px`;
+    canvas.width = Math.max(1, Math.floor(viewportWidth * dpr));
+    canvas.height = Math.max(1, Math.floor(viewportHeight * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    width = window.innerWidth;
-    height = window.innerHeight;
+    width = viewportWidth;
+    height = viewportHeight;
+
+    // Scale tree and UI down on smaller screens
+    const baseW = 1280;
+    const baseH = 720;
+    treeScale = Math.min(1, Math.min(width / baseW, height / baseH));
 }
 
 
@@ -132,9 +150,9 @@ class Particle {
         const speedScale = hasSupernovaed ? 1 : particleSpeedScale;
 
         this.angle += this.speed * speedScale;
-        const taper = 1 - this.treeY / 550;
-        const targetX = Math.cos(this.angle) * (this.maxRadius * taper);
-        const targetY = -this.treeY + 200;
+        const taper = 1 - (this.treeY * treeScale) / (550 * treeScale);
+        const targetX = Math.cos(this.angle) * (this.maxRadius * treeScale * taper);
+        const targetY = -(this.treeY * treeScale) + 200 * treeScale;
 
         if (!isExploded) {
             const lerpFactor = 0.08 * speedScale;
@@ -219,7 +237,7 @@ function generateSnowMounds() {
 function drawStar() {
     if (isExploded) return;
     ctx.save();
-    ctx.translate(width / 2, height * 0.7 - 360);
+    ctx.translate(width / 2, height * 0.7 - 360 * treeScale);
     ctx.rotate(Math.PI);
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
@@ -253,14 +271,14 @@ function drawMe() {
     if (!meImageLoaded || hasSupernovaed) return;
     const alpha = Math.max(0, Math.min(1, meAlpha));
     if (alpha <= 0) return;
-    const maxHeight = Math.min(height * 0.35, 180);
+    const maxHeight = Math.min(height * 0.3, 180 * treeScale);
     const aspectRatio = meImageSize.width && meImageSize.height ? meImageSize.width / meImageSize.height : 1;
     const drawHeight = maxHeight;
     const drawWidth = drawHeight * aspectRatio;
     const baseY = height * 0.85;
     // Keep Me anchored closer to the tree on wide screens; reduce drift on mobile/desktop
-    const sideOffset = Math.min(Math.max(width * 0.08, 110), 220);
-    const lift = Math.max(height * 0.02, 18);
+    const sideOffset = Math.min(Math.max(width * 0.06, 90 * treeScale), 200 * treeScale);
+    const lift = Math.max(height * 0.015, 14 * treeScale);
     
     // Breathing effect - subtle scale animation
     const breathingSpeed = 0.002;
@@ -290,8 +308,8 @@ function drawMe() {
 function drawSpeechBubble(text, meX, meY, meWidth, meHeight) {
     // Render text only (no bubble image) above the head
     const padding = 10;
-    const textMaxWidth = Math.max(140, Math.min(width * 0.4, 260));
-    const fontSize = Math.max(18, Math.min(24, width * 0.02)); // Larger font
+    const textMaxWidth = Math.max(120, Math.min(width * 0.4 * treeScale, 240 * treeScale));
+    const fontSize = Math.max(14, Math.min(24, width * 0.02 * treeScale)); // responsive font
     const lineHeight = fontSize + 5;
 
     const lines = wrapText(text, textMaxWidth);
@@ -480,6 +498,11 @@ window.addEventListener('resize', () => {
     mountains = generateMountains();
     snowMounds = generateSnowMounds();
 });
+
+// Handle mobile viewport changes (e.g., browser chrome show/hide)
+if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', resizeCanvas);
+}
 
 init();
 animate();
